@@ -4,19 +4,10 @@ import tensorflow as tf
 from loadVgg import loadWeights
 #import matplotlib.pyplot as plt
 
-#For initializing weights and biases
-
+#Helper functions for initializing weights
 def weight_variable_fromnp(inNp, inName):
     shape = inNp.shape
     return tf.Variable(inNp, name=inName)
-
-def weight_variable_xavier(shape, inName, conv=False):
-   #initial = tf.truncated_normal(shape, stddev=weightInitStd, name=inName)
-   if conv:
-       initial = tf.contrib.layers.xavier_initializer_conv2d()
-   else:
-       initial = tf.contrib.layers.xavier_initializer()
-   return tf.get_variable(inName, shape, initializer=initial)
 
 def weight_variable(shape, inName, inStd):
     initial = tf.truncated_normal_initializer(stddev=inStd)
@@ -26,9 +17,19 @@ def bias_variable(shape, inName, biasInitConst=.01):
    initial = tf.constant(biasInitConst, shape=shape, name=inName)
    return tf.Variable(initial)
 
+def weight_variable_xavier(shape, inName, conv=False):
+   #initial = tf.truncated_normal(shape, stddev=weightInitStd, name=inName)
+   if conv:
+       initial = tf.contrib.layers.xavier_initializer_conv2d()
+   else:
+       initial = tf.contrib.layers.xavier_initializer()
+   return tf.get_variable(inName, shape, initializer=initial)
+
+#Helper functions for creating input nodes
 def node_variable(shape, inName):
    return tf.placeholder("float", shape=shape, name=inName)
 
+#Helper functions for creating convolutions and pooling
 def conv2d(x, W, inName, stride = None):
     if stride:
         return tf.nn.conv2d(x, W, strides=stride, padding='SAME', name=inName)
@@ -41,19 +42,26 @@ def maxpool_2x2(x, inName):
 
 class imageClassification:
     #Initialize tf parameters here
-    progress = 1
+    #Learning rate for optimizer
+    #TODO make this parameter in train method
     learningRate = 1e-4
+    #Progress interval
+    progress = 1
+
+    #Global timestep
     timestep = 0
 
+    #Constructor takes inputShape, which is a 3 tuple (ny, nx, nf) based on the size of the image being fed in
     def __init__(self, inputShape, vggFile = None):
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
         self.buildModel(inputShape, vggFile)
 
-    def buildModel(self, inputShape, inMatFilename = None):
+    #Builds the model. inMatFilename should be the vgg file
+    def buildModel(self, inputShape, inMatFilename):
         if(inMatFilename):
             npWeights = loadWeights(inMatFilename)
 
-        #Put all conv layers on gpu
+        #Running on GPU
         with tf.device('gpu:0'):
             with tf.name_scope("inputOps"):
                 #Get convolution variables as placeholders
@@ -68,16 +76,13 @@ class imageClassification:
                 else:
                     self.W_conv1 = weight_variable_fromnp(np.zeros((11, 11, 3, 64), dtype=np.float32), "w_conv1")
                     self.B_conv1 = weight_variable_fromnp(np.zeros((64), dtype=np.float32), "b_conv1")
-                    ##First conv layer is 11x11, 3 input channels into 64 output channels
                     #self.W_conv1 = weight_variable_xavier([11, 11, 3, 64], "w_conv1", conv=True)
                     #self.B_conv1 = bias_variable([64], "b_conv1")
                 self.h_conv1 = tf.nn.relu(conv2d(self.inputImage, self.W_conv1, "conv1", stride=[1, 4, 4, 1]) + self.B_conv1)
                 self.h_norm1 = tf.nn.local_response_normalization(self.h_conv1, name="LRN1")
-                #relu is communative op, so do relu after pool for efficiency
                 self.h_pool1 = maxpool_2x2(self.h_norm1, "pool1")
 
             with tf.name_scope("Conv2Ops"):
-                #Second conv layer is 5x5 conv, into 256 output channels
                 if(inMatFilename):
                     self.W_conv2 = weight_variable_fromnp(npWeights["conv2_w"], "w_conv2")
                     self.B_conv2 = weight_variable_fromnp(npWeights["conv2_b"], "b_conv2")
@@ -90,10 +95,7 @@ class imageClassification:
                 self.h_norm2 = tf.nn.local_response_normalization(self.h_conv2, name="LRN2")
                 self.h_pool2 = maxpool_2x2(self.h_norm2, "pool2")
 
-            #Third layer is 3x3 conv into 256 output channels
-            #No pooling
             with tf.name_scope("Conv3Ops"):
-                #Second conv layer is 5x5 conv, into 256 output channels
                 if(inMatFilename):
                     self.W_conv3 = weight_variable_fromnp(npWeights["conv3_w"], "w_conv3")
                     self.B_conv3 = weight_variable_fromnp(npWeights["conv3_b"], "b_conv3")
@@ -104,10 +106,7 @@ class imageClassification:
                     #self.B_conv3 = bias_variable([256], "b_conv3")
                 self.h_conv3 = tf.nn.relu(conv2d(self.h_pool2, self.W_conv3, "conv3") + self.B_conv3, name="relu3")
 
-            #Fourth layer is 3x3 conv into 256 output channels
-            #No pooling
             with tf.name_scope("Conv4Ops"):
-                #Second conv layer is 5x5 conv, into 256 output channels
                 if(inMatFilename):
                     self.W_conv4 = weight_variable_fromnp(npWeights["conv4_w"], "w_conv4")
                     self.B_conv4 = weight_variable_fromnp(npWeights["conv4_b"], "b_conv4")
@@ -118,10 +117,7 @@ class imageClassification:
                     #self.B_conv4 = bias_variable([256], "b_conv4")
                 self.h_conv4 = tf.nn.relu(conv2d(self.h_conv3, self.W_conv4, "conv4") + self.B_conv4, name="relu4")
 
-            #Fifth layer is 3x3 conv into 256 output channels
-            #with pooling
             with tf.name_scope("Conv5Ops"):
-                #Second conv layer is 5x5 conv, into 256 output channels
                 if(inMatFilename):
                     self.W_conv5 = weight_variable_fromnp(npWeights["conv5_w"], "w_conv5")
                     self.B_conv5 = weight_variable_fromnp(npWeights["conv5_b"], "b_conv5")
@@ -133,14 +129,11 @@ class imageClassification:
                 self.h_conv5 = tf.nn.relu(conv2d(self.h_conv4, self.W_conv5, "conv5") + self.B_conv5)
                 self.h_pool5 = maxpool_2x2(self.h_conv5, "pool5")
 
+            #placeholder for specifying dropout
             self.keep_prob = tf.placeholder(tf.float32)
 
-            #Next is 3 fully connected layers
-            #We should have downsampled by 8 at this point
-            #fc1 should have 4096 channels
-
+            #32 comes from 4 stride in conv1, 2 stride in pool1, 2 stride in pool2, 2 stride in pool5
             numInputs = (inputShape[0]/32) * (inputShape[1]/32) * 256
-
             with tf.name_scope("FC1"):
                 #if(inMatFilename):
                 #    self.W_conv5 = weight_variable_fromnp(npWeights["fc1_w"], "w_fc1")
@@ -184,7 +177,6 @@ class imageClassification:
                 #Define loss
                 #self.loss = tf.reduce_mean(-tf.reduce_sum(self.gt * tf.log(self.est), reduction_indices=[1]))
                 self.loss = tf.reduce_mean(-(self.gt[:, 1]*.8* tf.log(self.est[:, 1]) + self.gt[:, 0]*.2*tf.log(self.est[:, 0])))
-                #self.loss = tf.reduce_mean(tf.square(self.gt - self.est))/2
 
             with tf.name_scope("Opt"):
                 #Define optimizer
@@ -207,19 +199,20 @@ class imageClassification:
                 boolGtIdx = tf.cast(self.gtIdx, tf.bool)
                 boolEstIdx = tf.cast(self.estIdx, tf.bool)
 
-                #Logical and for true positive and true negative operators
+                #Logical and for true positive
                 lAnd = tf.logical_and(boolGtIdx, boolEstIdx)
                 self.tp = tf.reduce_sum(tf.cast(lAnd, tf.float32))
-
+                #Logical nor for true negatives
                 lNor = tf.logical_not(tf.logical_or(boolGtIdx, boolEstIdx))
                 self.tn = tf.reduce_sum(tf.cast(lNor, tf.float32))
 
-                #Subtraction and where for others
+                #Subtraction and comparison for others
                 lSub = self.gtIdx - self.estIdx
                 Ones = tf.cast(tf.ones(tf.shape(lSub)), tf.int64)
                 self.fn = tf.reduce_sum(tf.cast(tf.equal(lSub, Ones), tf.float32))
                 self.fp = tf.reduce_sum(tf.cast(tf.equal(lSub, -Ones), tf.float32))
 
+                #Accuracy, precision, and recall calculations
                 self.accuracy = (self.tp + self.tn)/(self.tp+self.tn+self.fp+self.fn)
                 self.precision = self.tp/(self.tp+self.fp)
                 self.recall = self.tp/(self.tp+self.fn)
@@ -233,7 +226,6 @@ class imageClassification:
         tf.scalar_summary('fp', self.fp, name="fp")
         tf.scalar_summary('tn', self.tn, name="tn")
         tf.scalar_summary('fn', self.fn, name="fn")
-
 
         tf.histogram_summary('input', self.inputImage, name="image")
         tf.histogram_summary('gt', self.gt, name="gt")
@@ -265,9 +257,11 @@ class imageClassification:
         #Define saver
         self.saver = tf.train.Saver()
 
+    #Initializes session.
     def initSess(self):
         self.sess.run(tf.initialize_all_variables())
 
+    #Allocates and specifies the output directory for tensorboard summaries
     def writeSummary(self, summaryDir):
         self.mergedSummary = tf.merge_all_summaries()
         self.train_writer = tf.train.SummaryWriter(summaryDir + "/train", self.sess.graph)
@@ -276,6 +270,9 @@ class imageClassification:
     def closeSess(self):
         self.sess.close()
 
+    #Trains model for numSteps
+    #If pre is False, will train entire network
+    #If pre is True, will train only fully connected network
     def trainModel(self, dataObj, numSteps, saveFile, pre=False, miniBatchSize = 128):
         #Define session
         for i in range(numSteps):
@@ -296,6 +293,8 @@ class imageClassification:
         save_path = self.saver.save(self.sess, saveFile, global_step=self.timestep, write_meta_graph=False)
         print("Model saved in file: %s" % save_path)
 
+    #Evaluates all of inData at once
+    #If an inGt is provided, will calculate summary as test set
     def evalModel(self, inData, inGt = None):
         (numData, ny, nx, nf) = inData.shape
         if(inGt != None):
@@ -311,6 +310,8 @@ class imageClassification:
             self.test_writer.add_summary(summary, self.timestep)
         return outVals
 
+    #Evaluates inData, but in miniBatchSize batches for memory efficiency
+    #If an inGt is provided, will calculate summary as test set
     def evalModelBatch(self, miniBatchSize, inData, inGt=None):
         (numData, ny, nx, nf) = inData.shape
         if(inGt != None):
@@ -359,15 +360,8 @@ class imageClassification:
         #Return output data
         return outData
 
+    #Loads a tf checkpoint
     def loadModel(self, loadFile):
         self.saver.restore(self.sess, loadFile)
         print("Model %s loaded" % loadFile)
-
-    #def saveModel(self, saveFile):
-    #    #Save model
-
-
-        #TO load:
-        #saver.restore(sess, "/tmp/model.ckpt")
-        #print("Model restored.")
 

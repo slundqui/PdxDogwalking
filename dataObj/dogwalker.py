@@ -134,6 +134,9 @@ class dataObj:
             assert(0)
         return outImage
 
+    #Reads image provided in the argument, resizes, and normalizes image
+    #Also parses ground truth label from path and sets a one-hot 2 dimensional vector
+    #Returns the image and ground truth
     def readImage(self, filename):
         image = imread(filename)
         image = ((self.resizeImage(image).astype(np.float32)/256)-self.mean)/self.std
@@ -148,8 +151,7 @@ class dataObj:
             assert(0)
         return(image, gt)
 
-    #Function to return new image and depth file
-    #TODO generate random ranking and randomize images
+    #Grabs the next image in the list. Will shuffle images when rewinding
     def nextImage(self):
         imgFile = self.imgFiles[self.shuffleIdx[self.imgIdx]]
         #Update imgIdx
@@ -160,7 +162,7 @@ class dataObj:
             shuffle(range(self.numImages))
         return self.readImage(imgFile)
 
-    #Get all segments of current image
+    #Get all segments of current image. This is what evaluation calls for testing
     def allImages(self):
         outData = np.zeros((self.numImages, self.inputShape[0], self.inputShape[1], self.inputShape[2]))
         outGt = np.zeros((self.numImages, 2))
@@ -170,6 +172,8 @@ class dataObj:
             outGt[i, :] = data[1]
         return (outData, outGt)
 
+    #Gets numExample images and stores it into an outer dimension.
+    #This is what TF object calls to get images for training
     def getData(self, numExample):
         outData = np.zeros((numExample, self.inputShape[0], self.inputShape[1], 3))
         outGt = np.zeros((numExample, 2))
