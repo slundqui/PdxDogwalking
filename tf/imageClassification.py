@@ -224,13 +224,9 @@ class imageClassification:
                 self.precision = self.tp/(self.tp+self.fp)
                 self.recall = self.tp/(self.tp+self.fn)
 
-                correct_predictions = tf.equal(self.gtIdx, self.estIdx)
-                self.accuracy2 = tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
-
         #Summaries
         tf.scalar_summary('loss', self.loss, name="lossSum")
         tf.scalar_summary('accuracy', self.accuracy, name="accSum")
-        tf.scalar_summary('accuracy2', self.accuracy2, name="accSum2")
         tf.scalar_summary('precision', self.precision, name="precSum")
         tf.scalar_summary('recall', self.recall, name="recallSum")
         tf.scalar_summary('tp', self.tp, name="tp")
